@@ -1,6 +1,20 @@
 #include "memory_manager.h"
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 
 static char physical_memory[8388608]; /* 8 MB to simulate physical memory */
+int FIRST_ALLOCATE;
+int PAGE_SIZE;
+int NUMBER_PAGES;
+
+/*
+* Gets memory metadata.
+*/
+static void init_memory_metadata() {
+        PAGE_SIZE = (int) sysconf(_SC_PAGE_SIZE);
+        NUMBER_PAGES = 8388608 / page_size;
+}
 
 /*
 * Returns a void pointer to allocated memory.
@@ -9,6 +23,9 @@ static char physical_memory[8388608]; /* 8 MB to simulate physical memory */
 * Should communicate with scheduler to know which thread made the request so it knows which page to allocate from.
 */
 void *my_allocate(int size, char *FILE, int *LINE, REQID threadreq) {
+        if (FIRST_ALLOCATE == 1) {
+                init_memory_metadata();
+        }
         return NULL;
 }
 
