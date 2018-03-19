@@ -1,6 +1,3 @@
-#include <stdio.h>
-#include <string.h>
-
 enum REQID {
         LIBRARYREQ,
         THREADREQ
