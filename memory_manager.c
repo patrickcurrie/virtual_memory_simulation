@@ -1,4 +1,5 @@
 #include "memory_manager.h"
+#include "my_pthread_t.h"
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -11,9 +12,19 @@ int NUMBER_PAGES;
 /*
 * Gets memory metadata.
 */
-static void init_memory_metadata() {
+static void init_memory_metadata(int size, char *FILE, int *LINE, REQID threadreq) {
+        /* Set memory metadata. */
         PAGE_SIZE = (int) sysconf(_SC_PAGE_SIZE);
         NUMBER_PAGES = 8388608 / page_size;
+
+        struct page;
+        if (threadreq = LIBRARYREQ)
+                page.tid = NULL;
+        else
+                page.tid = NULL; // Call function in my_pthread_t.h to get this.
+        page.start_address = physical_memory;
+        page.end_address = physical_memory + (PAGE_SIZE - 1);
+        page.next = NULL;
 }
 
 /*
@@ -25,6 +36,7 @@ static void init_memory_metadata() {
 void *my_allocate(int size, char *FILE, int *LINE, REQID threadreq) {
         if (FIRST_ALLOCATE == 1) {
                 init_memory_metadata();
+                FIRST_ALLOCATE = 0;
         }
         return NULL;
 }
