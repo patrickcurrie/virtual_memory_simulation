@@ -6,17 +6,22 @@ enum REQID {
         THREADREQ
 };
 
-struct page {
-        my_pthread_t tid;
-        char *start_address;
-        char *end_address;
-        struct page *next;
-}
-
 struct block {
         size_t size;
         char *data;
         struct block *next;
+}
+
+struct page {
+        my_pthread_t tid;
+        char *start_address;
+        char *end_address;
+        struct block *block_list_head;
+        struct page *next;
+}
+
+struct page_list {
+        struct page *head;
 }
 
 // When user calls malloc or free from a thread.
