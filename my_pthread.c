@@ -814,6 +814,10 @@ int my_pthread_mutex_destroy(my_pthread_mutex_t *mutex) {
         return 0;
 }
 
+my_pthread_t get_current_tid() {
+        return SCHEDULER->current_tcb->tid;
+}
+
 void print_multi_level_priority_queue() {
         int i=0;
         int x=0;

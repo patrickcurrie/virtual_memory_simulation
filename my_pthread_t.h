@@ -122,6 +122,9 @@ int my_pthread_mutex_unlock(my_pthread_mutex_t *mutex);
 /* destroy the mutex */
 int my_pthread_mutex_destroy(my_pthread_mutex_t *mutex);
 
+/* Get tid of current thread */
+my_pthread_t get_current_tid();
+
 
 #endif
 #define USE_MY_PTHREAD 1 //(comment it if you want to use real pthread)
