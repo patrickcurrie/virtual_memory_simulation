@@ -4,10 +4,11 @@
 #include <string.h>
 #include <unistd.h>
 
-static char physical_memory[8388608]; /* 8 MB to simulate physical memory */
+static char PHYSICAL_MEMORY[8388608]; /* 8 MB to simulate physical memory */
 int FIRST_ALLOCATE;
 int PAGE_SIZE;
 int NUMBER_PAGES;
+struct page_list PAGE_LIST;
 
 /*
 * Gets memory metadata.
@@ -21,10 +22,13 @@ static void init_memory_metadata(int size, char *FILE, int *LINE, REQID threadre
         if (threadreq = LIBRARYREQ)
                 page.tid = NULL;
         else
-                page.tid = NULL; // Call function in my_pthread_t.h to get this.
+                page.tid = get_current_tid();
         page.start_address = physical_memory;
         page.end_address = physical_memory + (PAGE_SIZE - 1);
+        page.block_list_head = NULL;
         page.next = NULL;
+        memcpy(PHYSICAL_MEMORY, &page, sizof(page));
+        PAGE_LIST.head = PHYSICAL_MEMORY;
 }
 
 /*
@@ -38,6 +42,16 @@ void *my_allocate(int size, char *FILE, int *LINE, REQID threadreq) {
                 init_memory_metadata();
                 FIRST_ALLOCATE = 0;
         }
+        struct page *tmp = PAGE_LIST.head;
+        while (tmp != NULL) {
+                /*
+                * Locate page with matching tid.
+                * Loop through block list of this page to find first freely available block that is large enough.
+                * Split block into size of memory insert and then the rest, store data in first part of the split.
+                * Adjust the block list accordingly.
+                */
+        }
+
         return NULL;
 }
 
