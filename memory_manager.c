@@ -10,13 +10,14 @@ int PAGE_SIZE;
 int NUMBER_PAGES;
 struct page_list PAGE_LIST;
 
+
 /*
 * Gets memory metadata.
 */
 static void init_memory_metadata(int size, char *FILE, int *LINE, REQID threadreq) {
         /* Set memory metadata. */
         PAGE_SIZE = (int) sysconf(_SC_PAGE_SIZE);
-        NUMBER_PAGES = 8388608 / page_size;
+        NUMBER_PAGES = 8388608 / PAGE_SIZE;
 
         struct page pg;
         if (threadreq = LIBRARYREQ)
@@ -27,31 +28,10 @@ static void init_memory_metadata(int size, char *FILE, int *LINE, REQID threadre
         pg.end_address = PHYSICAL_MEMORY + (PAGE_SIZE - 1);
         pg.block_list_head = NULL;
         pg.next = NULL;
-        memcpy(PHYSICAL_MEMORY, &pg, sizof(pg));
+        memcpy(PHYSICAL_MEMORY, &pg, sizof(pg));//undefined ref to sizeof
         PAGE_LIST.head = PHYSICAL_MEMORY;
 }
 
-static void allocate_for_thread(int size, char *FILE, int *LINE, REQID threadreq, struct *page) {
-        struct block *tmp = page->block_list_head;
-        struct block new_blk;
-        if (tmp == NULL) { /* This is the first block to be allocated for this page. */
-                new_blk.size = size; /* Change allocate to accept size_t instead of int for size. */
-                new_blk.data = FILE;
-                new_blk.next = NULL;
-                /*
-                * Copy new block into page's region of physical memory.
-                * Set page->block_list_head to address of newly inserted block.
-                * return
-                */
-        }
-        while (tmp != NULL) {
-                /*
-                * Loop through block list of this page to find first freely available block that is large enough.
-                * Split block into size of memory insert and then the rest, store data in first part of the split.
-                * Adjust the block list accordingly.
-                */
-        }
-}
 
 /*
 * Returns a void pointer to allocated memory.
@@ -61,7 +41,7 @@ static void allocate_for_thread(int size, char *FILE, int *LINE, REQID threadreq
 */
 void *my_allocate(int size, char *FILE, int *LINE, REQID threadreq) {
         if (FIRST_ALLOCATE == 1) {
-                init_memory_metadata();
+              // init_memory_metadata(); - argument passing
                 FIRST_ALLOCATE = 0;
         }
         struct page *tmp = PAGE_LIST.head;
@@ -75,10 +55,17 @@ void *my_allocate(int size, char *FILE, int *LINE, REQID threadreq) {
         return NULL;
 }
 
+
 /*
 * Finds the page associated with the calling thread and frees allocated memory from it.
 * Should communicate with scheduler to know which thread made the request so it knows which page to free the allocation from.
 */
 void my_deallocate(void *ptr, char *FILE, int *LINE, REQID threadreq) {
 
+}
+
+
+int main(int argc, char **argv){
+printf("test\n");
+return 1;
 }
