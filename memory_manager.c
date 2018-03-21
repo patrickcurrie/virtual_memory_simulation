@@ -19,7 +19,6 @@ static void init_memory_metadata(int size, char *FILE, int *LINE, REQID threadre
         PAGE_SIZE = (int) sysconf(_SC_PAGE_SIZE);
         NUMBER_PAGES = 8388608 / PAGE_SIZE;
 
-
         struct page pg;
         if (threadreq = LIBRARYREQ)
                 pg.tid = NULL;
