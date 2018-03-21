@@ -32,6 +32,28 @@ static void init_memory_metadata(int size, char *FILE, int *LINE, REQID threadre
         PAGE_LIST.head = PHYSICAL_MEMORY;
 }
 
+static void allocate_for_thread(int size, char *FILE, int *LINE, REQID threadreq, struct *page) {	
+       struct block *tmp = page->block_list_head;	
+        struct block new_blk;	
+        if (tmp == NULL) { /* This is the first block to be allocated for this page. */	
+                new_blk.size = size; /* Change allocate to accept size_t instead of int for size. */	
+                new_blk.data = FILE;	
+                new_blk.next = NULL;	
+                /*	
+                * Copy new block into page's region of physical memory.	
+                * Set page->block_list_head to address of newly inserted block.	
+                * return	
+                */	
+        }	
+        while (tmp != NULL) {	
+                /*	
+                * Loop through block list of this page to find first freely available block that is large enough.	
+                * Split block into size of memory insert and then the rest, store data in first part of the split.	
+                * Adjust the block list accordingly.	
+                */	
+        }	
+}
+
 
 
 /*
