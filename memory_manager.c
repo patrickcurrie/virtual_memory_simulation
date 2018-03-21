@@ -30,6 +30,7 @@ static void init_memory_metadata(int size, char *FILE, int *LINE, REQID threadre
         pg.block_list_head = NULL;
         pg.next = NULL;
         memcpy(PHYSICAL_MEMORY, &pg, sizof(pg));//undefined ref to sizeof
+
         PAGE_LIST.head = PHYSICAL_MEMORY;
 }
 
