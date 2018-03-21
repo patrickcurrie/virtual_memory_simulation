@@ -33,6 +33,7 @@ static void init_memory_metadata(int size, char *FILE, int *LINE, REQID threadre
 }
 
 
+
 /*
 * Returns a void pointer to allocated memory.
 * Finds the page associated with the calling thread and allocated memory from it.
