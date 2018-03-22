@@ -6,11 +6,17 @@ enum REQUEST_ID {
         THREADREQ
 };
 
+enum BLOCK_STATE {
+        UNALLOCATED,
+        ALLOCATED
+};
+
 struct block {
+        enum BLOCK_STATE state;
         int size;
-        char *data;
+        char *address;
         struct block *next;
-}
+};
 
 struct page {
         my_pthread_t tid;
@@ -19,11 +25,11 @@ struct page {
         char *end_address;
         struct block *block_list_head;
         struct page *next;
-}
+};
 
 struct page_list {
         struct page *head;
-}
+};
 
 // When user calls malloc or free from a thread.
 #define malloc(x) my_allocate(x, __FILE__, __LINE__, REQUEST_ID)
