@@ -46,6 +46,24 @@ static void *allocate_block(int size, struct page *current_page) {
                         * Store the two new blocks in metadata region of memory.
                         * Adjust the page's block list to account for the two new blocks.
                         */
+                        struct block alloc_blk;
+                        alloc_blk.address = tmp_curr.address;
+                        alloc_blk.size = size;
+                        alloc_blk.state = ALLOCATED;
+                        current_page.size_of_allocated += size;
+                        struct block unalloc_blk;
+                        unalloc_blk.address = tmp_curr.address + size;
+                        /* Size of unalloc_blk is based on whether it is the last block in the list or not. */
+                        unalloc_blk.size = tmp_curr.next == NULL ? PAGE_SIZE - current_page.size_of_allocated : tmp_curr.size - alloc_blk.size;
+                        unalloc_blk.state = UNALLOCATED;
+                        /* Adjust the page list accordingly. */
+                        tmp_prev.next = alloc_blk;
+                        alloc_blk.next = unallock_blk;
+                        unalloc_blk.next = tmp_curr.next == NULL ? NULL : tmp_curr.next;
+                        /*
+                        * Function to store block metadata goes here.
+                        * store_block_metadata(size, current_page);
+                        */
                         break;
                 }
                 tmp_prev = tmp_curr;
