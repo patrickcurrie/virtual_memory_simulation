@@ -11,14 +11,23 @@ enum BLOCK_STATE {
         ALLOCATED
 };
 
+enum PAGE_STATE {
+        ASSIGNED,
+        UNASSIGNED
+}
+
 struct block {
         enum BLOCK_STATE state;
-        int size;
-        char *address;
+        int data_size;
+        int total_size;
+        char *block_address;
+        char *data_address;
         struct block *next;
 };
 
 struct page {
+        enum PAGE_STATE state;
+        enum REQUEST_ID request_id;
         my_pthread_t tid;
         int size_of_allocated;
         char *start_address;
@@ -27,8 +36,12 @@ struct page {
         struct page *next;
 };
 
-struct page_list {
-        struct page *head;
+struct memory_metadata {
+        int memory_metadata_init;
+        int page_size;
+        int number_pages;
+        char *address;
+        struct page *page_list_head;
 };
 
 // When user calls malloc or free from a thread.
