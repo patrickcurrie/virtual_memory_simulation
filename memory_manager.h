@@ -26,6 +26,8 @@ struct page {
         char *end_address;
         struct block *block_list_head;
         struct page *next;
+        struct page *pageList;
+        int isContinuous;
 };
 
 struct page_list {
@@ -42,4 +44,8 @@ struct page_list {
 void *my_allocate(int size, char *FILE, int *LINE, REQUEST_ID request_id);
 
 void my_deallocate(void *ptr, char *FILE, int *LINE, REQUEST_ID request_id);
+<<<<<<< HEAD
+=======
+
+>>>>>>> branch 'suva2' of https://github.com/patrickcurrie/virtual_memory_simulation.git
 

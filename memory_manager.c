@@ -10,6 +10,27 @@ int PAGE_SIZE;
 int NUMBER_PAGES;
 struct page_list PAGE_LIST;
 
+
+struct block* findPage(int tid){
+
+	struct page *tmp = PAGE_LIST.head;
+
+	while(tmp->next != NULL){
+		if(tmp->tid == tid){
+
+		return tmp;
+
+		}
+
+
+		tmp=tmp->next;
+	}
+
+
+}
+
+
+
 /*
 * Sets memory metadata and initial page metadata.
 * Everything in here needs to be associated with a block.
@@ -96,24 +117,65 @@ static void allocate_for_scheduler(int size) {
 
 /* Allocates memory for a thread. */
 static void allocate_for_thread(int size) {
+
+
+
+	/*
+	 * psuedo code
+	 * if size is bigger than page size allocate right number of pages
+
+	 * if not enough space - allocate another page
+	 * figure out when to use mprotect
+	 */
 		// need more than 1 page - assuming page struct goes at the top of each page
 		if(size > PAGE_SIZE -sizeof(struct page) ){
 			int num_pages = size/ (PAGE_SIZE - sizeof(struct page));
 
 		}
-	// if size is greater than page need to make more pages
+		int foundpage = 0;
         struct page *tmp = PAGE_LIST.head;
         my_pthread_t curr_tid = get_current_tid();
         while (tmp != NULL) { /* Locate page with matching tid. */
                 if (tmp->tid == curr_tid) { /* This is the threads page. */
                         /* Is the page full? */
-                        if (tmp->size_of_allocated + size > PAGE_SIZE) {
+                        if (tmp->size_of_allocated + size + sizeof(struct block) > PAGE_SIZE) {
                                 tmp = tmp->next;
                                 continue;
                         }
+                        foundpage=1;
                         allocate_block(size, tmp);
                 }
                 tmp = tmp->next;
+        }
+
+        // need to allocated new page
+        if(!foundpage){
+        	struct page *tidPage = findPage(curr_tid); //find the page associated with tid
+        	struct page *tmp2 = PAGE_LIST.head;
+
+        	while(tmp2->next !=NULL){
+        			if(tmp2->isContinuous == 0 && tmp2->tid == -1){ //is free to use and is not used by another page to be continous
+        				tmp2->tid = tidPage->tid;
+        				tmp2->isContinuous = 1;
+        				struct page *pagetmp = tidPage;
+
+        				//add new page to end of original page linked list -
+        				while(pagetmp->next != NULL){
+
+        					pagetmp= pagetmp->next;
+        				}
+        				pagetmp->next = tmp2;
+
+
+        			}
+
+
+
+        	tmp2 = tmp2->next;
+
+        	}
+
+
         }
 }
 
@@ -206,4 +268,8 @@ void signal_handler(int signal, siginfo_t *si, void *unused) {
 }
 
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> branch 'suva2' of https://github.com/patrickcurrie/virtual_memory_simulation.git
 
