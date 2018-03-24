@@ -22,7 +22,7 @@ struct block {
         int total_size;
         char *block_address;
         char *data_address;
-        struct block *next;
+        char *next;
 };
 
 struct page {
@@ -32,8 +32,8 @@ struct page {
         int size_of_allocated;
         char *start_address;
         char *end_address;
-        struct block *block_list_head;
-        struct page *next;
+        char *block_list_head;
+        char *next;
 };
 
 struct memory_metadata {
@@ -41,7 +41,7 @@ struct memory_metadata {
         int page_size;
         int number_pages;
         char *address;
-        struct page *page_list_head;
+        char *page_list_head;
 };
 
 // When user calls malloc or free from a thread.
