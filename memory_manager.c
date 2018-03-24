@@ -39,6 +39,7 @@ static void assign_page(REQUEST_ID request_id, my_pthread_t tid) {
                                 assign_pg.state = ASSIGNED;
                                 memcpy(assign_pg.start_address, &assign_pg, sizeof(struct page));
                                 //return assign_pg.start_address;
+                                return;
                         } else { /* Split unassigned page int an assigned page and unassigned page. */
                                 /* Create assigned page. */
                                 struct page assign_pg
@@ -78,6 +79,7 @@ static void assign_page(REQUEST_ID request_id, my_pthread_t tid) {
                                 memcpy(assign_pg.start_address, &assign_pg, sizeof(struct page));
                                 memcpy(unassign_pg.start_address, &unassign_pg, sizeof(struct page));
                                 //return assign_pg.start_address;
+                                return;
                         }
                 }
                 tmp_prev = tmp_curr;
