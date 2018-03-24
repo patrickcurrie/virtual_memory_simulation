@@ -34,6 +34,7 @@ static void assign_page(REQUEST_ID request_id, my_pthread_t tid) {
                                 unalloc_blk.total_size = MEMORY_METADATA.page_size - sizeof(struct page);
                                 unalloc_blk.state = UNALLOCATED;
                                 /* Assign this block to the newly assigned page's block list. */
+                                memcpy(unalloc_blk.block_address, &unalloc_blk, sizeof(struct block));
                                 assign_pg.block_list_head = unalloc_blk.block_address;
                                 assign_pg.state = ASSIGNED;
                                 memcpy(assign_pg.start_address, &assign_pg, sizeof(struct page));
@@ -54,6 +55,7 @@ static void assign_page(REQUEST_ID request_id, my_pthread_t tid) {
                                 unalloc_blk.total_size = MEMORY_METADATA.page_size - sizeof(struct page);
                                 unalloc_blk.state = UNALLOCATED;
                                 /* Assign this block to the newly assigned page's block list. */
+                                memcpy(unalloc_blk.block_address, &unalloc_blk, sizeof(struct block));
                                 assign_pg.block_list_head = unalloc_blk.block_address;
                                 /* Create unassigned page. */
                                 struct page unassign_pg;
