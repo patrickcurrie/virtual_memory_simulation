@@ -10,10 +10,12 @@ struct memory_metadata MEMORY_METADATA;
 static int INIT_MEMORY_METADATA = 0;
 
 /* TEMPORARY FILLER FUNCTION SO LIBRARY CAN BE RUN WITHOUT my_pthread.h. */
+/*
 static my_pthread_t get_current_tid() {
         my_pthread_t tid = pthread_self();
         return tid;
 }
+*/
 /*************************************************************************/
 
 
@@ -71,7 +73,7 @@ static void assign_page(enum REQUEST_ID request_id, my_pthread_t tid) {
                                 /* Create unassigned page. */
                                 struct page unassign_pg;
                                 unassign_pg.request_id = UNKNOWN;
-                                unassign_pg.tid = NULL;
+                                unassign_pg.tid = -1;
                                 unassign_pg.size_of_allocated = sizeof(struct page);
                                 unassign_pg.start_address = assign_pg.end_address + 1;
                                 unassign_pg.end_address = pg.end_address;
@@ -121,7 +123,7 @@ static void init_memory_metadata(enum REQUEST_ID request_id) {
         */
         struct page pg;
         pg.request_id = UNKNOWN;
-        pg.tid = NULL;
+        pg.tid = -1;
         pg.size_of_allocated = sizeof(struct page);
         pg.start_address = MEMORY_METADATA.address + sizeof(struct memory_metadata);
         pg.end_address = &PHYSICAL_MEMORY[sizeof(PHYSICAL_MEMORY) - 1];
@@ -230,7 +232,7 @@ static void *allocate_for_scheduler(int size) {
                 tmp = pg.next;
         }
 
-        assign_page(LIBRARYREQ, NULL);
+        assign_page(LIBRARYREQ, -1);
         return allocate_for_scheduler(size);
 }
 
@@ -264,7 +266,7 @@ static void *allocate_for_thread(int size) {
 * If there is not enough memory in the page to allocate from, return a NULL pointer.
 * Should communicate with scheduler to know which thread made the request so it knows which page to allocate from.
 */
-void *my_allocate(int size, char *FILE, int *LINE, enum REQUEST_ID request_id) {
+void *my_allocate(int size, char *FILE, int LINE, enum REQUEST_ID request_id) {
         void *alloc_addr = NULL;
         if (INIT_MEMORY_METADATA == 0)
                 init_memory_metadata(request_id);
@@ -282,10 +284,34 @@ void *my_allocate(int size, char *FILE, int *LINE, enum REQUEST_ID request_id) {
 * Finds the page associated with the calling thread and frees allocated memory from it.
 * Should communicate with scheduler to know which thread made the request so it knows which page to free the allocation from.
 */
-void my_deallocate(void *ptr, char *FILE, int *LINE, enum REQUEST_ID request_id) {
-
+void my_deallocate(void *ptr, char *FILE, int LINE, enum REQUEST_ID request_id) {
+        return;
 }
+
+/*
+********************************************************************************
+*********************************START TESTING**********************************
+********************************************************************************
+*/
+/*
+void double_it(void *number) {
+        //void *num = (int *) number;
+        int *doubled_num = malloc(sizeof(int));
+        int i;
+        for (i = 0; i < 10; i++) {
+                *doubled_num += *(int *) number * 2;
+        }
+        printf("Double_num is: %d", *doubled_num);
+}
+*/
 
 int main() {
-        printf("It compiled!\n");
+        printf("It runs!\n");
+
 }
+
+/*
+********************************************************************************
+**********************************END TESTING***********************************
+********************************************************************************
+*/

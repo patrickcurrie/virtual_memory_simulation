@@ -1,7 +1,7 @@
 # Testing
 Benchmark/
 tests/
-memory_manager
+test/
 
 # Prerequisites
 *.d

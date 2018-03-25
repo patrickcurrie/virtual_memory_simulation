@@ -1,8 +1,10 @@
-#include <stdlib.h>
-//#include "my_pthread_t.h"
-#include <pthread.h>
+#ifndef MEMORY_MANAGER_H
+#define MEMORY_MANAGER_H
 
-#define my_pthread_t pthread_t
+#include <stdlib.h>
+#include "my_pthread_t.h"
+
+typedef uint my_pthread_t;
 
 enum REQUEST_ID {
         UNKNOWN,
@@ -49,10 +51,12 @@ struct memory_metadata {
 };
 
 // When user calls malloc or free from a thread.
-#define malloc(x) my_allocate(x, __FILE__, __LINE__, REQUEST_ID)
+#define malloc(x) my_allocate(x, __FILE__, __LINE__, THREADREQ)
 
-#define free(x) my_deallocate(x, __FILE__, __LINE__, REQUEST_ID)
+#define free(x) my_deallocate(x, __FILE__, __LINE__, THREADREQ)
 
-void *my_allocate(int size, char *FILE, int *LINE, enum REQUEST_ID request_id);
+void *my_allocate(int size, char *FILE, int LINE, enum REQUEST_ID request_id);
 
-void my_deallocate(void *ptr, char *FILE, int *LINE, enum REQUEST_ID request_id);
+void my_deallocate(void *ptr, char *FILE, int LINE, enum REQUEST_ID request_id);
+
+#endif

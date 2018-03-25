@@ -17,6 +17,7 @@
 #include <sys/time.h>
 #include <string.h>
 #include <errno.h>
+#include "memory_manager.h"
 
 typedef uint my_pthread_t;
 
