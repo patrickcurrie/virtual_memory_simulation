@@ -402,7 +402,6 @@ void signal_handler(int signo, siginfo_t *info, void *context) {
                 if (SCHEDULER->current_tcb->priority == NUMBER_LEVELS - 1) { // Is at bottom level, can't demote any lower.
                         my_pthread_yield_helper();
                 }
-
                 AFTER_UNLOCK_PRIORITY = SCHEDULER->current_tcb->priority;
                 change_priority(SCHEDULER->current_tcb->tid, SCHEDULER->current_tcb->priority - 1);
                 my_pthread_yield_after_unlock_helper();
@@ -462,7 +461,6 @@ int time_compare(struct timeval start, struct timeval end, int gap){
 
 /*
 Maintenance done on the multi-level priority queue to handle the SIGALRM signal.
-
 Responsible for:
 - Deleting threads with TERMINATED state from multi-level priotity queue (free tcb and adjust queue).
 - Promoting and demoting threads in multi-level priority queue.
@@ -731,7 +729,6 @@ int my_pthread_join(my_pthread_t thread, void **value_ptr) {
         }
         /*
         printf("\n--\n\n");
-
         printf("\n\n--\n");
         printf("Printing mlpq...\n");
         print_multi_level_priority_queue();
@@ -772,7 +769,6 @@ int my_pthread_mutex_init(my_pthread_mutex_t *mutex, const pthread_mutexattr_t *
 int my_pthread_mutex_lock(my_pthread_mutex_t *mutex) {
         /*
         while (__sync_lock_test_and_set(mutex->state, LOCKED)) {
-
         }
         */
 
@@ -816,6 +812,10 @@ int my_pthread_mutex_destroy(my_pthread_mutex_t *mutex) {
 
 my_pthread_t get_current_tid() {
         return SCHEDULER->current_tcb->tid;
+}
+
+tcb* get_tcb() {
+        return SCHEDULER->current_tcb;
 }
 
 void print_multi_level_priority_queue() {
@@ -905,3 +905,4 @@ void print_lock_queue(queue *q) {
         }
                 printf("\n--\n");
 }
+

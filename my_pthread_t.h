@@ -40,6 +40,9 @@ typedef struct threadControlBlock {
         void **return_value;
         struct threadControlBlock *next_tcb;
         int joined;
+
+       struct page *head;
+       int last;
 } tcb;
 
 typedef struct queue {
@@ -69,7 +72,13 @@ typedef struct {
         int *priority_time_slices;
 } scheduler;
 
+
+
+
+
 /* Function Declarations: */
+tcb	*get_tcb();
+
 void signal_handler();
 /* Queue Functions */
 void queue_init(queue *q);
@@ -140,3 +149,4 @@ my_pthread_t get_current_tid();
 #define pthread_mutex_unlock my_pthread_mutex_unlock
 #define pthread_mutex_destroy my_pthread_mutex_destroy
 #endif
+
