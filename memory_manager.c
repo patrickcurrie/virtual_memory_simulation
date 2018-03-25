@@ -1,24 +1,34 @@
 #include "memory_manager.h"
-#include "my_pthread_t.h"
+//#include "my_pthread_t.h"
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
 static char PHYSICAL_MEMORY[8388608]; /* 8 MB to simulate physical memory. */
-PHYSICAL_MEMORY[0] = NULL; /* NULL if memory metadata is not initialized. */
+//PHYSICAL_MEMORY[0] = NULL; /* NULL if memory metadata is not initialized. */
 struct memory_metadata MEMORY_METADATA;
+static int INIT_MEMORY_METADATA = 0;
+
+/* TEMPORARY FILLER FUNCTION SO LIBRARY CAN BE RUN WITHOUT my_pthread.h. */
+static my_pthread_t get_current_tid() {
+        my_pthread_t tid = pthread_self();
+        return tid;
+}
+/*************************************************************************/
+
+
 
 /* Allocates a new page in physical memory. */
-static void assign_page(REQUEST_ID request_id, my_pthread_t tid) {
+static void assign_page(enum REQUEST_ID request_id, my_pthread_t tid) {
         char *tmp_curr = MEMORY_METADATA.page_list_head;
         char *tmp_prev;
         struct page pg;
         while (tmp_curr != NULL) {
                 /* Find a suitable page and assign it. */
-                memcpy(&pg, tmp_curr->start_address, sizeof(struct page));
+                memcpy(&pg, tmp_curr, sizeof(struct page));
                 if (pg.state == UNASSIGNED) {
                         if (pg.end_address - pg.start_address + 1 == MEMORY_METADATA.page_size) {
-                                struct page assign_pg
+                                struct page assign_pg;
                                 assign_pg.request_id = request_id;
                                 assign_pg.tid = tid;
                                 assign_pg.size_of_allocated = sizeof(struct page);
@@ -30,7 +40,7 @@ static void assign_page(REQUEST_ID request_id, my_pthread_t tid) {
                                 struct block unalloc_blk;
                                 unalloc_blk.block_address = assign_pg.start_address + sizeof(struct page);
                                 unalloc_blk.data_address = unalloc_blk.block_address + sizeof(struct block);
-                                unalloc_blk.data_size = NULL;
+                                unalloc_blk.data_size = 0;
                                 unalloc_blk.total_size = MEMORY_METADATA.page_size - sizeof(struct page);
                                 unalloc_blk.state = UNALLOCATED;
                                 /* Assign this block to the newly assigned page's block list. */
@@ -42,7 +52,7 @@ static void assign_page(REQUEST_ID request_id, my_pthread_t tid) {
                                 return;
                         } else { /* Split unassigned page int an assigned page and unassigned page. */
                                 /* Create assigned page. */
-                                struct page assign_pg
+                                struct page assign_pg;
                                 assign_pg.request_id = request_id;
                                 assign_pg.tid = tid;
                                 assign_pg.size_of_allocated = sizeof(struct page);
@@ -52,7 +62,7 @@ static void assign_page(REQUEST_ID request_id, my_pthread_t tid) {
                                 struct block unalloc_blk;
                                 unalloc_blk.block_address = assign_pg.start_address + sizeof(struct page);
                                 unalloc_blk.data_address = unalloc_blk.block_address + sizeof(struct block);
-                                unalloc_blk.data_size = NULL;
+                                unalloc_blk.data_size = 0;
                                 unalloc_blk.total_size = MEMORY_METADATA.page_size - sizeof(struct page);
                                 unalloc_blk.state = UNALLOCATED;
                                 /* Assign this block to the newly assigned page's block list. */
@@ -60,7 +70,7 @@ static void assign_page(REQUEST_ID request_id, my_pthread_t tid) {
                                 assign_pg.block_list_head = unalloc_blk.block_address;
                                 /* Create unassigned page. */
                                 struct page unassign_pg;
-                                unassign_pg.request_id = NULL;
+                                unassign_pg.request_id = UNKNOWN;
                                 unassign_pg.tid = NULL;
                                 unassign_pg.size_of_allocated = sizeof(struct page);
                                 unassign_pg.start_address = assign_pg.end_address + 1;
@@ -95,7 +105,7 @@ static void assign_page(REQUEST_ID request_id, my_pthread_t tid) {
 /*
 * Sets memory metadata and creates an unassigned page.
 */
-static void init_memory_metadata(REQUEST_ID request_id) {
+static void init_memory_metadata(enum REQUEST_ID request_id) {
         /* Initialize memory metadata. */
         struct memory_metadata mem_meta;
         mem_meta.page_size = (int) sysconf(_SC_PAGE_SIZE);
@@ -104,13 +114,13 @@ static void init_memory_metadata(REQUEST_ID request_id) {
         mem_meta.page_list_head = NULL;
         memcpy(mem_meta.address, &mem_meta, sizeof(struct memory_metadata));
         //MEMORY_METADATA = mem_meta.address;
-        memcpy(MEMORY_METADATA, mem_meta.address, sizeof(struct memory_metadata));
+        memcpy(&MEMORY_METADATA, mem_meta.address, sizeof(struct memory_metadata));
         /*
         * Create the first unassigned page.
         * This will be split into assigned pages as new pages are added.
         */
         struct page pg;
-        pg.request_id = NULL;
+        pg.request_id = UNKNOWN;
         pg.tid = NULL;
         pg.size_of_allocated = sizeof(struct page);
         pg.start_address = MEMORY_METADATA.address + sizeof(struct memory_metadata);
@@ -120,6 +130,7 @@ static void init_memory_metadata(REQUEST_ID request_id) {
         pg.state = UNASSIGNED;
         memcpy(pg.start_address, &pg, sizeof(struct page));
         MEMORY_METADATA.page_list_head = pg.start_address;
+        INIT_MEMORY_METADATA = 1;
 }
 
 /*
@@ -130,8 +141,8 @@ static void init_memory_metadata(REQUEST_ID request_id) {
 static void *allocate_block(int size, char *page_address) {
         struct page current_page;
         memcpy(&current_page, page_address, sizeof(struct page));
-        struct char *tmp_curr = current_page.block_list_head;
-        struct char *tmp_prev = NULL;
+        char *tmp_curr = current_page.block_list_head;
+        char *tmp_prev = NULL;
         struct block blk;
         while (tmp_curr != NULL) {
                 /* Find a suitable block and allocate it. */
@@ -150,7 +161,7 @@ static void *allocate_block(int size, char *page_address) {
                                 /* Copy new block to physical memory. */
                                 memcpy(alloc_blk.block_address, &alloc_blk, sizeof(struct block));
                                 /* Copy adjusted page to physical memory. */
-                                memcpy(current_page.address, &current_page, sizeof(struct page));
+                                memcpy(current_page.start_address, &current_page, sizeof(struct page));
                                 return (void *) alloc_blk.data_address;
                         } else { /* Need to split the block into an allocated and unallocated block. */
                                 struct block alloc_blk; /* Allocated block of the split */
@@ -163,7 +174,7 @@ static void *allocate_block(int size, char *page_address) {
                                 struct block unalloc_blk; /* Unallocated block of the split. */
                                 unalloc_blk.block_address = alloc_blk.block_address + alloc_blk.total_size;
                                 unalloc_blk.data_address = unalloc_blk.block_address + sizeof(struct block);
-                                unalloc_blk.data_size = NULL;
+                                unalloc_blk.data_size = 0;
                                 unalloc_blk.total_size = blk.total_size - alloc_blk.total_size;
                                 unalloc_blk.state = UNALLOCATED;
                                 /* Adjust the new blocks' next pointers accordingly to maintain this page's block list. */
@@ -185,7 +196,7 @@ static void *allocate_block(int size, char *page_address) {
                                         memcpy(unalloc_blk.block_address, &unalloc_blk, sizeof(struct block));
                                 }
                                 /* Copy adjusted page to physical memory. */
-                                memcpy(current_page.address, &current_page, sizeof(struct page));
+                                memcpy(current_page.start_address, &current_page, sizeof(struct page));
                                 return (void *) alloc_blk.data_address;
                         }
                 }
@@ -201,7 +212,7 @@ static void *allocate_block(int size, char *page_address) {
 }
 
 /* Allocates memory for the scheduler. */
-static void allocate_for_scheduler(int size) {
+static void *allocate_for_scheduler(int size) {
         char *tmp = MEMORY_METADATA.page_list_head;
         struct page pg;
         while (tmp != NULL) { /* Locate correct page for scheduler. */
@@ -220,11 +231,11 @@ static void allocate_for_scheduler(int size) {
         }
 
         assign_page(LIBRARYREQ, NULL);
-        allocate_for_scheduler(size);
+        return allocate_for_scheduler(size);
 }
 
 /* Allocates memory for a thread. */
-static void allocate_for_thread(int size) {
+static void *allocate_for_thread(int size) {
         char *tmp = MEMORY_METADATA.page_list_head;
         struct page pg;
         my_pthread_t curr_tid = get_current_tid();
@@ -243,8 +254,8 @@ static void allocate_for_thread(int size) {
                 tmp = pg.next;
         }
 
-        assign_page(THREADREQ, tid);
-        allocate_for_thread(size);
+        assign_page(THREADREQ, curr_tid);
+        return allocate_for_thread(size);
 }
 
 /*
@@ -253,14 +264,17 @@ static void allocate_for_thread(int size) {
 * If there is not enough memory in the page to allocate from, return a NULL pointer.
 * Should communicate with scheduler to know which thread made the request so it knows which page to allocate from.
 */
-void *my_allocate(int size, char *FILE, int *LINE, REQUEST_ID request_id) {
-        if (PHYSICAL_MEMORY[0] == NULL)
+void *my_allocate(int size, char *FILE, int *LINE, enum REQUEST_ID request_id) {
+        void *alloc_addr = NULL;
+        if (INIT_MEMORY_METADATA == 0)
                 init_memory_metadata(request_id);
         if (request_id == LIBRARYREQ)
-                allocate_for_scheduler(size);
-        else (request_id == THREADREQ)
-                allocate_for_thread(size);
-        return NULL;
+                alloc_addr = allocate_for_scheduler(size);
+        else if (request_id == THREADREQ)
+                alloc_addr = allocate_for_thread(size);
+        else
+                exit(1);
+        return alloc_addr;
 }
 
 
@@ -268,6 +282,10 @@ void *my_allocate(int size, char *FILE, int *LINE, REQUEST_ID request_id) {
 * Finds the page associated with the calling thread and frees allocated memory from it.
 * Should communicate with scheduler to know which thread made the request so it knows which page to free the allocation from.
 */
-void my_deallocate(void *ptr, char *FILE, int *LINE, REQUEST_ID request_id) {
+void my_deallocate(void *ptr, char *FILE, int *LINE, enum REQUEST_ID request_id) {
 
+}
+
+int main() {
+        printf("It compiled!\n");
 }
