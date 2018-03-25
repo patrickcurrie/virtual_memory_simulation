@@ -358,6 +358,8 @@ static void allocate_for_thread(int size) {
 				if ((size+page_mem_ftr) % 4096 > 0) {
 					num_of_pages++;
 				}
+			
+			// Does not have a head
 
 			if(get_tcb() -> head == NULL ){
 
@@ -371,8 +373,9 @@ static void allocate_for_thread(int size) {
 				 			get_tcb()->head = front;
 				 			fTable[0] = front;
 
-
-				 for(i=1;i<num_of_pages;i++){
+				//make rest of them
+					 
+				for(i=1;i<num_of_pages;i++){
 
 				tmp_page.frame = i;
 				tmp_page.tid = get_current_tid();
@@ -384,8 +387,8 @@ static void allocate_for_thread(int size) {
 				tmp_page.state = ASSIGNED;
 				fTable[i] = tmp_page;
 				 }
-				 get_tcb()->last = num_of_pages - 1;
-			}else{
+				 get_tcb()->last = num_of_pages - 1; // index of last frame
+			}else{ // does have a head
 
 				get_tcb()->last++;
 
