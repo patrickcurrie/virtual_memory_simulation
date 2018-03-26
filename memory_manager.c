@@ -18,7 +18,15 @@ static my_pthread_t get_current_tid() {
 */
 /*************************************************************************/
 
-
+static void print_page(struct page current_page) {
+        printf("\n\n--Current Page--\n");
+        printf("tid: %d\n", current_page.tid);
+        printf("size: %d\n", MEMORY_METADATA.page_size);
+        printf("size of allocated: %d\n", current_page.size_of_allocated);
+        printf("start address: %p\n", current_page.start_address);
+        printf("end address: %p\n", current_page.end_address);
+        printf("\n---------------\n\n");
+}
 
 /* Allocates a new page in physical memory. */
 static void assign_page(enum REQUEST_ID request_id, my_pthread_t tid) {
@@ -70,6 +78,7 @@ static void assign_page(enum REQUEST_ID request_id, my_pthread_t tid) {
                                 /* Assign this block to the newly assigned page's block list. */
                                 memcpy(unalloc_blk.block_address, &unalloc_blk, sizeof(struct block));
                                 assign_pg.block_list_head = unalloc_blk.block_address;
+                                assign_pg.state = ASSIGNED;
                                 /* Create unassigned page. */
                                 struct page unassign_pg;
                                 unassign_pg.request_id = UNKNOWN;
@@ -78,7 +87,26 @@ static void assign_page(enum REQUEST_ID request_id, my_pthread_t tid) {
                                 unassign_pg.start_address = assign_pg.end_address + 1;
                                 unassign_pg.end_address = pg.end_address;
                                 unassign_pg.block_list_head = NULL;
+                                unassign_pg.state = UNASSIGNED;
                                 /* Adjust the page list accordingly. */
+                                if (tmp_prev == NULL) { /* First page being split, there is no previous. */
+                                        assign_pg.next = unassign_pg.start_address;
+                                        unassign_pg.next = pg.next;
+                                        /* Copy adjusted pages into physical memory. */
+                                        memcpy(assign_pg.start_address, &assign_pg, sizeof(struct page));
+                                        memcpy(unassign_pg.start_address, &unassign_pg, sizeof(struct page));
+                                } else { /* Any page other than the first is being split, there is a previous. */
+                                        struct page prev_pg;
+                                        memcpy(&prev_pg, tmp_prev, sizeof(struct page));
+                                        prev_pg.next = assign_pg.start_address;
+                                        assign_pg.next = unassign_pg.start_address;
+                                        unassign_pg.next = pg.next;
+                                        /* Copy adjusted pages into physical memory. */
+                                        memcpy(prev_pg.start_address, &prev_pg, sizeof(struct page));
+                                        memcpy(assign_pg.start_address, &assign_pg, sizeof(struct page));
+                                        memcpy(unassign_pg.start_address, &unassign_pg, sizeof(struct page));
+                                }
+                                /*
                                 struct page prev_pg;
                                 memcpy(&prev_pg, tmp_prev, sizeof(struct page));
                                 prev_pg.next = assign_pg.start_address;
@@ -87,10 +115,12 @@ static void assign_page(enum REQUEST_ID request_id, my_pthread_t tid) {
                                 assign_pg.state = ASSIGNED;
                                 unassign_pg.state = UNASSIGNED;
                                 /* Copy newly adjusted pages into physical memory. */
+                                /*
                                 memcpy(prev_pg.start_address, &prev_pg, sizeof(struct page));
                                 memcpy(assign_pg.start_address, &assign_pg, sizeof(struct page));
                                 memcpy(unassign_pg.start_address, &unassign_pg, sizeof(struct page));
                                 //return assign_pg.start_address;
+                                */
                                 return;
                         }
                 }
@@ -164,6 +194,8 @@ static void *allocate_block(int size, char *page_address) {
                                 memcpy(alloc_blk.block_address, &alloc_blk, sizeof(struct block));
                                 /* Copy adjusted page to physical memory. */
                                 memcpy(current_page.start_address, &current_page, sizeof(struct page));
+                                printf("Allocated block for page...\n");
+                                print_page(current_page);
                                 return (void *) alloc_blk.data_address;
                         } else { /* Need to split the block into an allocated and unallocated block. */
                                 struct block alloc_blk; /* Allocated block of the split */
@@ -199,6 +231,8 @@ static void *allocate_block(int size, char *page_address) {
                                 }
                                 /* Copy adjusted page to physical memory. */
                                 memcpy(current_page.start_address, &current_page, sizeof(struct page));
+                                printf("Allocated block for page...\n");
+                                print_page(current_page);
                                 return (void *) alloc_blk.data_address;
                         }
                 }
