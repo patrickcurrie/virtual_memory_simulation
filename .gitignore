@@ -1,7 +1,7 @@
 # Testing
-Benchmark/
 tests/
 test/
+my_pthread_make/
 
 # Prerequisites
 *.d
