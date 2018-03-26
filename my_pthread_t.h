@@ -42,8 +42,14 @@ typedef struct threadControlBlock {
         int joined;
 
        struct page *head;
-       int last;
+       int last_frame;
 } tcb;
+
+
+
+
+
+
 
 typedef struct queue {
 	tcb *head;

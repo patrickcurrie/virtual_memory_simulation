@@ -3,7 +3,7 @@
 // iLab Server:
 
 #include "my_pthread_t.h"
-
+#include "memory_manager.h"
 #define CEILING_POS(X) ((X-(int)(X)) > 0 ? (int)(X+1) : (int)(X))
 #define CEILING_NEG(X) ((X-(int)(X)) < 0 ? (int)(X-1) : (int)(X))
 #define CEILING(X) ( ((X) > 0) ? CEILING_POS(X) : CEILING_NEG(X) )
@@ -43,7 +43,7 @@ static void thread_function_wrapper(tcb *tcb_node, void *(*function) (void *), v
         if (*tcb_node->return_value == NULL) {
                 //printf("Return is null.\n");
         }
-        void **tmp_return = malloc(sizeof(void *));
+        void **tmp_return = (void**)myallocate(sizeof(void *),NULL, 0, LIBRARYREQ);
         //printf("tmp_return addr before execute:%p\n", *tmp_return);
         *tmp_return = (*function)(arg);
         //printf("tmp_return addr after execute:%p\n", *tmp_return);
@@ -85,7 +85,7 @@ static int schedule_thread(tcb * tcb_node, int priority) {
 /*
 Set tcb pointer to thread with supplied tid.
 */
-static tcb *get_tcb(my_pthread_t tid) {
+ tcb *get_tcb(my_pthread_t tid) {
         sigset_t signal_mask;
         sigemptyset(&signal_mask);
         sigaddset(&signal_mask, SIGALRM);
@@ -210,7 +210,7 @@ static int get_num_scheduled_tcb() {
 // Returnd tcb pointer must be freed.
 static tcb *fold_mlpq_to_array() {
         int num_tcb = get_num_scheduled_tcb();
-        tcb *tcb_array = malloc(sizeof(tcb) * num_tcb);
+        tcb *tcb_array = (tcb *)myallocate(sizeof(tcb) * num_tcb,  NULL, 0, LIBRARYREQ);
         tcb *tmp_tcb_array = tcb_array;
         int i;
         int tcb_count = 0;
@@ -330,16 +330,16 @@ struct timeval current_time() {
 
 /* Initialize scheduler */
 void init_scheduler() {
-	SCHEDULER = malloc(sizeof(scheduler));
-	SCHEDULER->multi_level_priority_queue = malloc(sizeof(queue) * NUMBER_LEVELS);
+	SCHEDULER = myallocate(sizeof(scheduler),NULL, 0, LIBRARYREQ);
+	SCHEDULER->multi_level_priority_queue = (scheduler*)myallocate(sizeof(queue) * NUMBER_LEVELS,NULL, 0, LIBRARYREQ);
         int i;
 	for (i = 0; i < NUMBER_LEVELS; i++) {
 		queue_init(&(SCHEDULER->multi_level_priority_queue[i]));
 	}
 
 	SCHEDULER->main_tcb = NULL; // Set only after first call to my_pthread_create funtion.
-	SCHEDULER->current_tcb = NULL; // New tcb malloced in my_pthread_create function.
-	SCHEDULER->priority_time_slices = malloc(sizeof(int) * NUMBER_LEVELS);
+	SCHEDULER->current_tcb = NULL; // New tcb  in my_pthread_create function.
+	SCHEDULER->priority_time_slices = (int*)myallocate(sizeof(int) * NUMBER_LEVELS,NULL, 0, LIBRARYREQ);
 	for (i = 0; i < NUMBER_LEVELS; i++) {
 		SCHEDULER->priority_time_slices[i] = TIME_SLICE * (i + 1);
 	}
@@ -358,7 +358,7 @@ void init_timer() {
         //
         stack_t ss;
         ss.ss_size = SIGSTKSZ;
-        ss.ss_sp = malloc(SIGSTKSZ);
+        ss.ss_sp = myallocate(SIGSTKSZ,NULL, 0, LIBRARYREQ);
         struct sigaction action;
         sigemptyset(&action.sa_mask);
         sigaddset(&action.sa_mask, SIGALRM);
@@ -469,10 +469,10 @@ Responsible for:
 void scheduler_maintenance() {
         tcb *tcb_array = fold_mlpq_to_array();
         int num_scheduled = get_num_scheduled_tcb();
-        tcb *tmp_tcb_array = malloc(sizeof(tcb) * num_scheduled);
+        tcb *tmp_tcb_array = (tcb*)myallocate(sizeof(tcb) * num_scheduled,NULL, 0, LIBRARYREQ);
         memcpy(tmp_tcb_array, tcb_array, num_scheduled * sizeof(tcb)); // Because quick_select modifies array.
         int oldest_tcb_array_size = CEILING(num_scheduled * 0.15);
-        tcb *oldest_tcb_array = malloc(sizeof(tcb) * oldest_tcb_array_size);
+        tcb *oldest_tcb_array = (tcb*)myallocate(sizeof(tcb) * oldest_tcb_array_size,NULL, 0, LIBRARYREQ);
         tcb oldest_tcb = quick_select(tmp_tcb_array, num_scheduled, oldest_tcb_array_size - 1);
         free(tmp_tcb_array);
         printf("\n\n--\nPrinting all initial times of all scheduled threads...\n");
@@ -524,9 +524,9 @@ int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*func
         // Create tcb for main context.
         // Main context is the current on if create is running for the first time.
         if (TID == 0) {
-                tcb *tcb_main = malloc(sizeof(tcb));
+                tcb *tcb_main = (tcb*)myallocate(sizeof(tcb),NULL, 0, LIBRARYREQ);
         	tcb_main->tid = TID;
-                tcb_main->return_value = malloc(sizeof(void *));
+                tcb_main->return_value = (void**)myallocate(sizeof(void *),NULL, 0, LIBRARYREQ);
                 if (getcontext(&(tcb_main->context)) != 0) {
                         return -1; // Error getthing context
                 }
@@ -539,17 +539,17 @@ int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*func
 
 	// Create new tcb for thread.
 	// Get current context.
-	tcb *tcb_node = malloc(sizeof(tcb));
+	tcb *tcb_node = (tcb*)myallocate(sizeof(tcb),NULL, 0, LIBRARYREQ);
         TID++;
 	tcb_node->tid = TID;//*thread;
-        tcb_node->return_value = malloc(sizeof(void *));
+        tcb_node->return_value = (void**)myallocate(sizeof(void *),NULL, 0, LIBRARYREQ);
         *thread = TID;
 	if (getcontext(&(tcb_node->context)) != 0) {
 		return -1; // Error getthing context
 	}
 	// Configure context stack.
 	tcb_node->context.uc_link = 0;
-	tcb_node->context.uc_stack.ss_sp = malloc(STACK_SIZE);
+	tcb_node->context.uc_stack.ss_sp = myallocate(STACK_SIZE,NULL, 0, LIBRARYREQ);
 	tcb_node->context.uc_stack.ss_flags = 0;
 	tcb_node->context.uc_stack.ss_size = STACK_SIZE;
 	makecontext(&(tcb_node->context), (void *) thread_function_wrapper, 3, tcb_node, function, arg);
@@ -628,7 +628,7 @@ void my_pthread_yield_helper() {
 }
 
 /* Special case for schedule yielding after the most recent thread unlocked a mutex, runs first thread instead of rescheduling it and running the next.*/
-int my_pthread_yield_after_unlock_helper() {
+void my_pthread_yield_after_unlock_helper() {
         int current_priority = AFTER_UNLOCK_PRIORITY;
         AFTER_UNLOCK_PRIORITY = -1;
         if (HAS_RUN >= SCHEDULER->multi_level_priority_queue[current_priority].size) {
@@ -753,7 +753,7 @@ int my_pthread_mutex_init(my_pthread_mutex_t *mutex, const pthread_mutexattr_t *
                 init_scheduler();
         }
         ++NUMBER_LOCKS;
-        mutex->lock_wait_queue = malloc(sizeof(queue));
+        mutex->lock_wait_queue = (queue*)myallocate(sizeof(queue),NULL, 0, LIBRARYREQ);
         queue_init(mutex->lock_wait_queue);
         mutex->state = UNLOCKED;
         /*
@@ -814,7 +814,7 @@ my_pthread_t get_current_tid() {
         return SCHEDULER->current_tcb->tid;
 }
 
-tcb* get_tcb() {
+tcb* get_tcb2() {
         return SCHEDULER->current_tcb;
 }
 

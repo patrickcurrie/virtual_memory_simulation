@@ -1,481 +1,533 @@
+
 #include "memory_manager.h"
 #include "my_pthread_t.h"
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <string.h>
-void * swap_loc;
-static char PHYSICAL_MEMORY[8388608]; /* 8 MB to simulate physical memory. */
-char *mem_pointer = PHYSICAL_MEMORY; //easier to use
-PHYSICAL_MEMORY[0] = NULL; /* NULL if memory metadata is not initialized. */
-struct memory_metadata MEMORY_METADATA;
-int page_mem_ftr;
-struct page *fTable; // todo: need to allocate sizeof(struct page) * (8388608/4096) using lib id
+#include "my_pthread.c"
+
+
+void * physical_memory;
+page_ptr * fTable;
+block_ptr head;
+page_ptr current_page; // might not need
+
+int init = 1;
 int swap_file;
-int pages;
-int page_mem_ftr;
+int pages = 0;
+int block_str;
+int page_size;
+int r_timer;
 
 
-/*
- * signal handler, finds frame that it tried to access. if it's tid does not match wrong frame. Swap in right one
- * else just unprotect it cause tid matched
- */
-static void seg_handler(int sig, siginfo_t *si, void *unused){
-	void * segfault = (void *) si->si_addr;
-		int loc = (int)(segfault - mem_pointer);
-		int frame = loc / 4096;
 
-		if (fTable[frame].tid != get_tcb()->tid) {
-			int i;
-					struct page tmp = get_tcb()->head;
-					for (i = 0; i < frame; i++) {
-						tmp = tmp.n2;
+void * lib_start;
+void * swap_loc;
+void * shalloc_start;
+
+int count = 0;
+
+	void * allocate_lib(int x){
+		printf("lib call worked/n");
+		void * tmp = lib_start;
+					lib_start += (int)x;
+					mprotect(physical_memory, 6291456, PROT_NONE);
+					return tmp;
+
+	}
+
+
+void * myallocate(int x, char * file, int line, REQUEST_ID request_id) {
+
+	r_timer = 1;
+	mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+
+	void * ret_tmp;
+	page_ptr tmp_page;
+
+
+	if (init) {
+		init = 0;
+		block_str = sizeof(struct block);
+		page_size = sysconf(_SC_PAGESIZE);
+
+		pages = 0;
+		//Signal Handler
+		struct sigaction sa;
+		sa.sa_flags = SA_SIGINFO;
+		sigemptyset(&sa.sa_mask);
+		sa.sa_sigaction = seg_handler;
+		sigaction(SIGSEGV, &sa, NULL);
+
+
+		physical_memory = memalign( sysconf(_SC_PAGESIZE), 8388608);
+		swap_loc = physical_memory + 1540 * 4096;
+
+
+		swap_file = open("swap_file",O_RDWR | O_CREAT);
+		lseek(swap_file, 8338608*2, SEEK_SET);
+
+
+		lib_start = physical_memory + 1541*4096;
+		shalloc_start = physical_memory + 1536*4096;
+
+		fTable = (page_ptr *)myallocate(sizeof(page_ptr)*1536, NULL, 0, LIBRARYREQ);
+		r_timer = 1;
+		mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+	}
+
+
+	if(request_id == LIBRARYREQ){
+
+		return allocate_lib(x);
+
+		}
+		if(pages > 5632){
+			return NULL;
+
+		}
+	//size required is more than a page
+	if (x > (page_size - block_str) ) {
+
+
+		int i;
+		int num_of_pages = (x + block_str) / page_size;
+
+		if ((x+block_str) % page_size > 0) {
+			num_of_pages++;
+		}
+		//would need to move everything out of array
+		if (num_of_pages > 1536) {
+						return NULL;
 					}
-					swap_pages(frame, tmp->frame);
-					mprotect(mem_pointer, 8388608, PROT_NONE);
+		//First page - move them into front
+		if (get_tcb2()->head == NULL) {
 
+			for (i = 0; i < num_of_pages; i++) {
+				swap_pages(i, -1);
+				mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+			}
 
+			//REQUEST_ID state = LIBRARYREQ;
+			page_ptr front_page = (page_ptr)myallocate(sizeof(struct page), NULL, 0, LIBRARYREQ);
+			r_timer = 1;
+			mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+			front_page->frame = 0;
+			front_page->tid = get_current_tid();
+			front_page->block_head = NULL;
+			front_page->next = NULL;
+			front_page->front = front_page;
+			get_tcb2()->head = front_page;
+			front_page->num_of_pages = num_of_pages;
+			front_page->size = -1;
+			fTable[0] = front_page;
 
+			//Create rest of pages needed
+			for (i = 1; i < num_of_pages; i++) {
+				tmp_page = (page_ptr)myallocate(sizeof(struct page), NULL, 0, LIBRARYREQ);
+				r_timer = 1;
+				mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+				tmp_page->frame = i;
+				tmp_page->tid = get_current_tid();
+				tmp_page->next = NULL;
+				fTable[i-1]->next = tmp_page;
+				tmp_page->block_head = NULL;
+				tmp_page->size = -1;
+				tmp_page->num_of_pages = num_of_pages;
+				tmp_page->front = front_page;
+				fTable[i] = tmp_page;
+			}
+
+			get_tcb2()->last_frame = num_of_pages - 1;
+
+			current_page = tmp_page;
+		//DO not need to make 1st frame
+		} else {
+			if (get_tcb2()->last_frame + num_of_pages > 1535) {
+				return NULL;
+			}
+
+			get_tcb2()->last_frame++;
+			for (i = get_tcb2()->last_frame; i < get_tcb2()->last_frame + num_of_pages; i++) {
+				swap_pages(i, -1);
+				mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+			}
+
+			//front
+			page_ptr front_page = (page_ptr)myallocate(sizeof(struct page), NULL, 0, LIBRARYREQ);
+			r_timer = 1;
+			mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+			front_page->frame = get_tcb2()->last_frame;
+			front_page->tid = get_tcb2()->tid;
+			front_page->next = NULL;
+			fTable[get_tcb2()->last_frame-1]->next = front_page;
+			front_page->block_head = NULL;
+			front_page->front = front_page;
+			front_page->size= -1;
+			front_page->num_of_pages = num_of_pages;
+
+			get_tcb2()->head = front_page;
+			fTable[front_page->frame] = front_page;
+
+			//create rest of the pages
+			for (i = front_page->frame + 1; i < front_page->frame + num_of_pages; i++) {
+				get_tcb2()->last_frame++;
+				tmp_page = (page_ptr)myallocate(sizeof(struct page), NULL, 0, LIBRARYREQ);
+				r_timer = 1;
+				mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+				tmp_page->frame = i;
+				tmp_page->tid = get_tcb2()->tid;
+				tmp_page->next = NULL;
+				fTable[i-1]->next = tmp_page;
+				tmp_page->block_head = NULL;
+				tmp_page->front = front_page;
+				tmp_page->num_of_pages = num_of_pages;
+				tmp_page->size = -1;
+				fTable[i] = tmp_page;
+			}
+
+			current_page = tmp_page;
 		}
 
 
-		mprotect(mem_pointer + frame * 4096, 4096,PROT_READ | PROT_WRITE);
+		head = NULL;
+		// pages allocated next to each other, will fill it out in 1 go
+		ret_tmp = mymalloc(x, physical_memory + current_page->front->frame*page_size, page_size*num_of_pages);// todo: make this
 
-        }
+		current_page->block_head = head;
+		current_page->size = count_mem();
+		mprotect(physical_memory, 6291456, PROT_NONE);
 
-/*
- * handles all the swapping between the physical memory with itself and the virtual memory.
- */
-static void swap(int x, int y){
-/*/
- * y is y is what need to swapped in based on index
- */
+		r_timer = 0;
+		return ret_tmp;
+		//can ret memory
+	}
 
+
+	if (get_tcb2()->head != NULL) {
+		page_ptr page_tmp = fTable[get_tcb2()->last_frame];
+
+		//not in frame table need to swap it in
+		if (page_tmp->tid != get_tcb2()->tid) {
+
+			page_tmp = get_tcb2()->head;
+			while (page_tmp->next != NULL) {
+				page_tmp = page_tmp->next;
+			}
+			swap_pages(get_tcb2()->last_frame, page_tmp->frame);
+			mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+		}
+		current_page = page_tmp;
+
+		//front page exists so part of multiple pages
+		if (current_page->front != NULL) {
+			int i;
+			page_ptr swap_pg;
+
+			swap_pg = current_page->front;
+			for (i = current_page->front->frame; i < current_page->frame; i++) {
+				page_tmp = fTable[i];
+				if (page_tmp != swap_pg) {
+					swap_pages(page_tmp->frame, swap_pg->frame);
+					mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+				}
+				swap_pg = swap_pg->next;
+			}
+		}
+		head = current_page->block_head;
+
+	} else {
+
+		//can make more pages
+		if (pages < 5632) {
+			swap_pages(0, -1);
+			mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+			tmp_page = (page_ptr)myallocate(sizeof(struct page), NULL, 0, LIBRARYREQ);
+			r_timer = 1;
+			mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+			tmp_page->frame = 0;
+			tmp_page->tid = get_tcb2()->tid;
+			tmp_page->next = NULL;
+			tmp_page->block_head = NULL;
+			tmp_page->front = NULL;
+			tmp_page->num_of_pages = 1;
+			get_tcb2()->head = tmp_page;
+			fTable[0] = tmp_page;
+			current_page = tmp_page;
+		} else {
+			return NULL;
+		}
+		head = NULL;
+			}
+
+	ret_tmp = mymalloc(x, physical_memory + get_tcb2()->last_frame*4096, 4096);
+	current_page->block_head = head;
+
+	current_page->size = count_mem();
+
+	/*/
+	 * no room in page, look through its prev pages
+	 */
+	if (ret_tmp == NULL) {
+
+		page_ptr page_tmp = get_tcb2()->head;
+		int counter = 0;
+		while (page_tmp != NULL) {
+
+			if (page_tmp->size > (int)x) {
+				current_page = page_tmp;
+
+
+				if (current_page->frame != counter) {
+					swap_pages(counter, current_page->frame);
+					mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+				}
+
+				if (current_page->front != NULL) {
+					int i;
+					page_ptr swap_pg;
+					page_ptr block_tmp;
+
+					swap_pg = current_page->front;
+					for (i = current_page->front->frame; i < current_page->frame; i++) {
+						block_tmp = fTable[i];
+						if (block_tmp != swap_pg) {
+							swap_pages(block_tmp->frame, swap_pg->frame);
+							mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+						}
+						swap_pg = swap_pg->next;
+					}
+				}
+
+
+				head = current_page->block_head;
+
+				ret_tmp = mymalloc(x, 0, 0);
+				if (ret_tmp != NULL) {
+					current_page->block_head = head;
+					current_page->size = count_mem();
+					mprotect(physical_memory, 6291456, PROT_NONE);
+
+					r_timer = 0;
+					return ret_tmp;
+				}
+			}
+			counter++;
+			page_tmp = page_tmp->next;
+		}
+
+
+	//need to create new page since the prev pages didnt fit
+		if (pages < 5632 && get_tcb2()->last_frame < 1536) {
+			get_tcb2()->last_frame++;
+
+
+			swap_pages(get_tcb2()->last_frame, -1);
+			mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+			tmp_page = (page_ptr)myallocate(sizeof(struct page), NULL, 0, LIBRARYREQ);
+			r_timer = 1;
+			mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
+			tmp_page->frame = get_tcb2()->last_frame;
+			tmp_page->tid = get_tcb2()->tid;
+			tmp_page->next = NULL;
+			tmp_page->block_head = NULL;
+			tmp_page->num_of_pages = 1;
+			fTable[get_tcb2()->last_frame] = tmp_page;
+			fTable[get_tcb2()->last_frame-1]->next = tmp_page;
+			current_page = tmp_page;
+		} else {
+			return NULL;
+		}
+		head = NULL;
+
+		ret_tmp = mymalloc(x, physical_memory + get_tcb2()->last_frame ,page_size); //todo:
+		current_page->block_head = head;
+		current_page->size = count_mem();
+	}
+	mprotect(physical_memory, 6291456, PROT_NONE);
+
+	r_timer = 0;
+	return ret_tmp;
+}
+
+int mydeallocate(void * x, char * file, int line, REQUEST_ID request_id){
+
+
+	}
+
+
+
+
+/* signal handler */
+
+void seg_handler(int sig, siginfo_t *si, void *unused) {
+
+
+
+	void * seg_address = (void *) si->si_addr;
+	int location = (int)(seg_address - physical_memory);
+	int frame = location / 4096;
+
+	if (location < 0 || location > 1536*4096) {
+		exit(EXIT_FAILURE);
+	}
+
+	if (frame > get_tcb2()->last_frame) {
+		exit(EXIT_FAILURE);
+	}
+
+	if (fTable[frame]->tid != get_tcb2()->tid) {
+		int i;
+		page_ptr page_tmp = get_tcb2()->head;
+		for (i = 0; i < frame; i++) {
+			page_tmp = page_tmp->next;
+		}
+		swap_pages(frame, page_tmp->frame);
+		mprotect(physical_memory, 6291456, PROT_NONE);
+	}
+	mprotect(physical_memory + frame * 4096, 4096,PROT_READ | PROT_WRITE);
+	return;
+}
+
+void swap_pages(int wFrame, int rFrame) {
+
+	count++;
+
+	r_timer = 1;
+	mprotect(physical_memory, 6291456, PROT_READ | PROT_WRITE);
 
 	int swap_index;
-	if (y == -1) {
+	if (rFrame == -1) {
 
-		if(pages < 2048){
+		if(pages < 1537){
 
 
-			//Swap
-			memcpy(mem_pointer + pages*4096, mem_pointer + x * 4096, 4096);
 
-			//Update page table
-			if (fTable[x] != NULL) {
-				fTable[x].frame = pages;
-				fTable[pages] = fTable[x];
-				fTable[x] = NULL;
+			memcpy(physical_memory + pages*4096, physical_memory + wFrame * 4096, 4096);
+
+			if (fTable[wFrame] != NULL) {
+				fTable[wFrame]->frame = pages;
+				fTable[pages] = fTable[wFrame];
+				fTable[wFrame] = NULL;
 			}
 		}else{
-			fTable[x].frame = pages;
-			swap_index = pages - 2048;
+			fTable[wFrame]->frame = pages;
+			swap_index = pages - 1537;
 			lseek(swap_file, swap_index*4096, SEEK_SET);
-			write(swap_file, mem_pointer + x * 4096, 4096);
+			write(swap_file, physical_memory + wFrame * 4096, 4096);
 		}
 		pages++;
 	} else {
 
-		if (y < 2048) {
-			memcpy(swap_loc, mem_pointer + x * 4096, 4096);
-			memcpy(mem_pointer + x * 4096, mem_pointer + y * 4096, 4096);
-			memcpy(mem_pointer + y * 4096, swap_loc, 4096);
+		if (rFrame < 1537) {
+			memcpy(swap_loc, physical_memory + wFrame * 4096, 4096);
+			memcpy(physical_memory + wFrame * 4096, physical_memory + rFrame * 4096, 4096);
+			memcpy(physical_memory + rFrame * 4096, swap_loc, 4096);
 
-			//Update page table
-			struct page  tmp_page = fTable[x];
-			fTable[x] = fTable[y];
-			fTable[y] = tmp_page;
-			fTable[x].frame = x;
-			fTable[y].frame = y;
+			page_ptr tmp_p = fTable[wFrame];
+			fTable[wFrame] = fTable[rFrame];
+			fTable[rFrame] = tmp_p;
+			fTable[wFrame]->frame = wFrame;
+			fTable[rFrame]->frame = rFrame;
 		} else {
 			int i;
-
-			struct page  tmp_page = get_tcb()->head;
-			fTable[x].frame = y;
-			for (i = 0; i< x; i++) {
-				tmp_page = tmp_page->next;
+			if (get_tcb2()->tid == 2) {
+				//printf("Swapping %d with %d\n", wFrame, rFrame);
 			}
-			tmp_page. = x;
-			fTable[x] = tmp_page;
+			page_ptr tmp_p = get_tcb2()->head;
+			fTable[wFrame]->frame = rFrame;
+			for (i = 0; i< wFrame; i++) {
+				tmp_p = tmp_p->next;
+			}
+			tmp_p->frame = wFrame;
+			fTable[wFrame] = tmp_p;
 
-			memcpy(swap_loc, mem_pointer + x * 4096, 4096);
-			lseek(swap_file, (y - 2048)*4906, SEEK_SET);
-			read(swap_file, mem_pointer + x*4096, 4096);
-			lseek(swap_file, (y - 2048)*4906, SEEK_SET);
+			memcpy(swap_loc, physical_memory + wFrame * 4096, 4096);
+			lseek(swap_file, (rFrame - 1537)*4096, SEEK_SET);
+			read(swap_file, physical_memory + wFrame*4096, 4096);
+			lseek(swap_file, (rFrame - 1537)*4096, SEEK_SET);
 			write(swap_file, swap_loc, 4096);
 		}
 	}
+	r_timer = 0;
+}
 
+void lock_mem() {
+	mprotect(physical_memory, 6291456, PROT_NONE);
 }
 
 
-/* Allocates a new page in physical memory. */
-static void assign_page(REQUEST_ID request_id, my_pthread_t tid) {
-        char *tmp_curr = MEMORY_METADATA.page_list_head;
-        char *tmp_prev;
-        struct page pg;
-        while (tmp_curr != NULL) {
-                /* Find a suitable page and assign it. */
-                memcpy(&pg, tmp_curr->start_address, sizeof(struct page));
-                if (pg.state == UNASSIGNED) {
-                        if (pg.end_address - pg.start_address + 1 == MEMORY_METADATA.page_size) {
-                                struct page assign_pg
-                                assign_pg.request_id = request_id;
-                                assign_pg.tid = tid;
-                                assign_pg.size_of_allocated = sizeof(struct page);
-                                assign_pg.start_address = pg.start_address;
-                                assign_pg.end_address = pg.start_address + MEMORY_METADATA.page_size - 1;
-                                //assign_pg.block_list_head = NULL; /* Create new big block for this. */
-                                assign_pg.next = pg.next;
-                                /* Create a new unallocated block for this page's block list. */
-                                struct block unalloc_blk;
-                                unalloc_blk.block_address = assign_pg.start_address + sizeof(struct page);
-                                unalloc_blk.data_address = unalloc_blk.block_address + sizeof(struct block);
-                                unalloc_blk.data_size = NULL;
-                                unalloc_blk.total_size = MEMORY_METADATA.page_size - sizeof(struct page);
-                                unalloc_blk.state = UNALLOCATED;
-                                /* Assign this block to the newly assigned page's block list. */
-                                memcpy(unalloc_blk.block_address, &unalloc_blk, sizeof(struct block));
-                                assign_pg.block_list_head = unalloc_blk.block_address;
-                                assign_pg.state = ASSIGNED;
-                                memcpy(assign_pg.start_address, &assign_pg, sizeof(struct page));
-                                //return assign_pg.start_address;
-                                return;
-                        } else { /* Split unassigned page int an assigned page and unassigned page. */
-                                /* Create assigned page. */
-                                struct page assign_pg
-                                assign_pg.request_id = request_id;
-                                assign_pg.tid = tid;
-                                assign_pg.size_of_allocated = sizeof(struct page);
-                                assign_pg.start_address = pg.start_address;
-                                assign_pg.end_address = pg.start_address + MEMORY_METADATA.page_size - 1;
-                                /* Create an unallocated block for assigned page. */
-                                struct block unalloc_blk;
-                                unalloc_blk.block_address = assign_pg.start_address + sizeof(struct page);
-                                unalloc_blk.data_address = unalloc_blk.block_address + sizeof(struct block);
-                                unalloc_blk.data_size = NULL;
-                                unalloc_blk.total_size = MEMORY_METADATA.page_size - sizeof(struct page);
-                                unalloc_blk.state = UNALLOCATED;
-                                /* Assign this block to the newly assigned page's block list. */
-                                memcpy(unalloc_blk.block_address, &unalloc_blk, sizeof(struct block));
-                                assign_pg.block_list_head = unalloc_blk.block_address;
-                                /* Create unassigned page. */
-                                struct page unassign_pg;
-                                unassign_pg.request_id = NULL;
-                                unassign_pg.tid = NULL;
-                                unassign_pg.size_of_allocated = sizeof(struct page);
-                                unassign_pg.start_address = assign_pg.end_address + 1;
-                                unassign_pg.end_address = pg.end_address;
-                                unassign_pg.block_list_head = NULL;
-                                /* Adjust the page list accordingly. */
-                                struct page prev_pg;
-                                memcpy(&prev_pg, tmp_prev, sizeof(struct page));
-                                prev_pg.next = assign_pg.start_address;
-                                assign_pg.next = unassign_pg.start_address;
-                                unassign_pg.next = pg.next;
-                                assign_pg.state = ASSIGNED;
-                                unassign_pg.state = UNASSIGNED;
-                                /* Copy newly adjusted pages into physical memory. */
-                                memcpy(prev_pg.start_address, &prev_pg, sizeof(struct page));
-                                memcpy(assign_pg.start_address, &assign_pg, sizeof(struct page));
-                                memcpy(unassign_pg.start_address, &unassign_pg, sizeof(struct page));
-                                //return assign_pg.start_address;
-                                return;
-                        }
-                }
-                tmp_prev = tmp_curr;
-                tmp_curr = pg.next;
-        }
+int count_mem() {
+	block_ptr tmp_block = head;
+	int rtn = 0;
 
-        /*
-        * No room for new page, write pages out to a swap file to create room.
-        * Call assign_page(request_id, tid) again to assign a new page now that there is room.
-        */
-}
-
-/*
-* Sets memory metadata and creates an unassigned page.
-*/
-static void init_memory_metadata(REQUEST_ID request_id) {
-	mem_pointer = memalign( sysconf(_SC_PAGESIZE), 8388608);
-	swap_file = open("swap_file",O_RDWR | O_CREAT);
-			lseek(swap_file, 8338608*2, SEEK_SET);
-
-
-			swap_loc = mem_pointer + 2047 * 4096;
-
-	struct sigaction sa;
-			sa.sa_flags = SA_SIGINFO;
-			sigemptyset(&sa.sa_mask);
-			sa.sa_sigaction = seg_handler;
-
-
-        /* Initialize memory metadata. */
-
-	page_mem_ftr=(sizeof(struct page) + sizeof(struct block);
-        struct memory_metadata mem_meta;
-        mem_meta.page_size = (int) sysconf(_SC_PAGE_SIZE);
-        mem_meta.number_pages = 8388608 / mem_meta.page_size;
-        mem_meta.address = PHYSICAL_MEMORY;
-        mem_meta.page_list_head = NULL;
-        memcpy(mem_meta.address, &mem_meta, sizeof(struct memory_metadata));
-        //MEMORY_METADATA = mem_meta.address;
-        memcpy(MEMORY_METADATA, mem_meta.address, sizeof(struct memory_metadata));
-        /*
-        * Create the first unassigned page.
-        * This will be split into assigned pages as new pages are added.
-        */
-        struct page pg;
-        pg.request_id = NULL;
-        pg.tid = NULL;
-        pg.size_of_allocated = sizeof(struct page);
-        pg.start_address = MEMORY_METADATA.address + sizeof(struct memory_metadata);
-        pg.end_address = &PHYSICAL_MEMORY[sizeof(PHYSICAL_MEMORY) - 1];
-        pg.block_list_head = NULL;
-        pg.next = NULL;
-        pg.state = UNASSIGNED;
-        memcpy(pg.start_address, &pg, sizeof(struct page));
-        MEMORY_METADATA.page_list_head = pg.start_address;
-}
-
-/*
-* Given a page and a size, allocates an appropriate block of memory within that page,
-* Stores block metadata in physical memory.
-* Return NULL if suitable block is not found, meaning a different page should be searched instead.
-*/
-static void *allocate_block(int size, char *page_address) {
-        struct page current_page;
-        memcpy(&current_page, page_address, sizeof(struct page));
-        struct char *tmp_curr = current_page.block_list_head;
-        struct char *tmp_prev = NULL;
-        struct block blk;
-        while (tmp_curr != NULL) {
-                /* Find a suitable block and allocate it. */
-                memcpy(&blk, tmp_curr, sizeof(struct block));
-                if (blk.state == UNALLOCATED && blk.total_size >= size) {
-                        if (blk.total_size == size) { /* Don't need to split the block. */
-                                struct block alloc_blk; /* Allocated block of the split */
-                                alloc_blk.block_address = blk.block_address;
-                                alloc_blk.data_address = alloc_blk.block_address + sizeof(struct block);
-                                alloc_blk.data_size = size;
-                                alloc_blk.total_size = size + sizeof(struct block);
-                                alloc_blk.state = ALLOCATED;
-                                current_page.size_of_allocated += alloc_blk.total_size;
-                                /* Adjust the new blocks' next pointers accordingly to maintain this page's block list. */
-                                alloc_blk.next = blk.next;
-                                /* Copy new block to physical memory. */
-                                memcpy(alloc_blk.block_address, &alloc_blk, sizeof(struct block));
-                                /* Copy adjusted page to physical memory. */
-                                memcpy(current_page.address, &current_page, sizeof(struct page));
-                                return (void *) alloc_blk.data_address;
-                        } else { /* Need to split the block into an allocated and unallocated block. */
-                                struct block alloc_blk; /* Allocated block of the split */
-                                alloc_blk.block_address = blk.block_address;
-                                alloc_blk.data_address = alloc_blk.block_address + sizeof(struct block);
-                                alloc_blk.data_size = size;
-                                alloc_blk.total_size = size + sizeof(struct block);
-                                alloc_blk.state = ALLOCATED;
-                                current_page.size_of_allocated += alloc_blk.total_size;
-                                struct block unalloc_blk; /* Unallocated block of the split. */
-                                unalloc_blk.block_address = alloc_blk.block_address + alloc_blk.total_size;
-                                unalloc_blk.data_address = unalloc_blk.block_address + sizeof(struct block);
-                                unalloc_blk.data_size = NULL;
-                                unalloc_blk.total_size = blk.total_size - alloc_blk.total_size;
-                                unalloc_blk.state = UNALLOCATED;
-                                /* Adjust the new blocks' next pointers accordingly to maintain this page's block list. */
-                                if (tmp_prev == NULL) { /* First block is being split, there is no previous block. */
-                                        alloc_blk.next = unalloc_blk.block_address;
-                                        unalloc_blk.next = blk.next;
-                                        /* Copy adjusted blocks to physical memory. */
-                                        memcpy(alloc_blk.block_address, &alloc_blk, sizeof(struct block));
-                                        memcpy(unalloc_blk.block_address, &unalloc_blk, sizeof(struct block));
-                                } else { /* Any block other than the first is being split, there is a previous block. */
-                                        struct block prev_blk;
-                                        memcpy(&prev_blk, tmp_prev, sizeof(struct block));
-                                        prev_blk.next = alloc_blk.block_address;
-                                        alloc_blk.next = unalloc_blk.block_address;
-                                        unalloc_blk.next = blk.next;
-                                        /* Copy adjusted blocks to physical memory. */
-                                        memcpy(prev_blk.block_address, &prev_blk, sizeof(struct block));
-                                        memcpy(alloc_blk.block_address, &alloc_blk, sizeof(struct block));
-                                        memcpy(unalloc_blk.block_address, &unalloc_blk, sizeof(struct block));
-                                }
-                                /* Copy adjusted page to physical memory. */
-                                memcpy(current_page.address, &current_page, sizeof(struct page));
-                                return (void *) alloc_blk.data_address;
-                        }
-                }
-                tmp_prev = tmp_curr;
-                tmp_curr = blk.next;
-        }
-
-        /*
-        * Suitable block is not found. Find the next page to search.
-        */
-
-        return NULL;
-}
-
-/* Allocates memory for the scheduler. */
-static void allocate_for_scheduler(int size) {
-        char *tmp = MEMORY_METADATA.page_list_head;
-        struct page pg;
-        while (tmp != NULL) { /* Locate correct page for scheduler. */
-                memcpy(&pg, tmp, sizeof(struct page));
-                if (pg.request_id == LIBRARYREQ) { /* tid is NULL for scheduler pages. */
-                        /* Is the page full? */
-                        if (pg.size_of_allocated >= MEMORY_METADATA.page_size) {
-                                tmp = pg.next;
-                                continue;
-                        }
-                        void *blk_addr = allocate_block(size, pg.start_address);
-                        if (blk_addr != NULL)
-                                return blk_addr;
-                }
-                tmp = pg.next;
-        }
-
-        assign_page(LIBRARYREQ, NULL);
-        allocate_for_scheduler(size);
-}
-
-/* Allocates memory for a thread. */
-static void allocate_for_thread(int size) {
-	/* New
-	 * if need multiple pages
-	 */
-	 struct page tmp_page;
-	 struct page front;
-
-	if(size >  (4096 - (sizeof(struct page) + sizeof(struct block))  )  ){
-
-				int i;
-				int num_of_pages = (size + page_mem_ftr) / 4096;
-
-				if ((size+page_mem_ftr) % 4096 > 0) {
-					num_of_pages++;
-				}
-			
-			// Does not have a head
-
-			if(get_tcb() -> head == NULL ){
-
-				 front.frame = 0;
-				 front.tid = get_current_tid();
-				 front.n2 = NULL;
-				 front.front = front;
-
-				 front.num_of_pages = num_of_pages;
-				 			front.state = ASSIGNED;
-				 			get_tcb()->head = front;
-				 			fTable[0] = front;
-
-				//make rest of them
-					 
-				for(i=1;i<num_of_pages;i++){
-
-				tmp_page.frame = i;
-				tmp_page.tid = get_current_tid();
-				tmp_page.n2 = NULL;
-				fTable[i-1]n2 = tmp_page;
-
-				tmp_page.front = front;
-				tmp_page.num_of_pages = num_of_pages;
-				tmp_page.state = ASSIGNED;
-				fTable[i] = tmp_page;
-				 }
-				 get_tcb()->last = num_of_pages - 1; // index of last frame
-			}else{ // does have a head
-
-				get_tcb()->last++;
-
-
-							front.frame = get_tcb()->last;
-							front.tid = get_current_tid;
-							front.n2 = NULL;
-							fTable[get_tcb()->last-1]->n2 = front;
-
-							front.front = front;
-							front.num_of_pages = num_of_pages;
-							front.state = ASSIGNED;
-							get_tcb()->head = front;
-							fTable[front.frame] = front;
-
-							for (i = front.frame + 1; i < front.frame + num_of_pages; i++) {
-											get_tcb()->last++;
-
-
-											tmp_page.frame = i;
-											tmp_page.tid = get_current_tid();
-											tmp_page.n2 = NULL;
-											fTable[i-1].n2 = tmp_page;
-
-											tmp_page.front = front;
-											tmp_page.num_of_pages = num_of_pages;
-											tmp_page.state = ASSIGNED;
-											fTable[i] = tmp_page;
-										}
-
-
-
-			}
-
-			//call block code here
-			//ret
-			void *blk_addr = allocate_block(4096-sizeof(struct block), front.start_address);
-			return blk_addr;
-
+	while(tmp_block != NULL) {
+		if (tmp_block->state == UNALLOCATED) {
+			rtn += tmp_block->size;
+		}
+		tmp_block = tmp_block->next;
 	}
 
-
-
-        char *tmp = MEMORY_METADATA.page_list_head;
-        struct page pg;
-        my_pthread_t curr_tid = get_current_tid();
-        while (tmp != NULL) { /* Locate page with matching tid. */
-                memcpy(&pg, tmp, sizeof(struct page));
-                if (pg.request_id == THREADREQ && pg.tid == curr_tid) { /* This is the threads page. */
-                        /* Is the page full? */
-                        if (pg.size_of_allocated + size >= MEMORY_METADATA.page_size) {
-                                tmp = pg.next;
-                                continue;
-                        }
-                        void *blk_addr = allocate_block(size, pg.start_address);
-                        if (blk_addr != NULL)
-                                return blk_addr;
-                }
-                tmp = pg.next;
-        }
-
-        assign_page(THREADREQ, tid);
-        allocate_for_thread(size);
-}
-
-/*
-* Returns a void pointer to allocated memory.
-* Finds the page associated with the calling thread and allocated memory from it.
-* If there is not enough memory in the page to allocate from, return a NULL pointer.
-* Should communicate with scheduler to know which thread made the request so it knows which page to allocate from.
-*/
-void *my_allocate(int size, char *FILE, int *LINE, REQUEST_ID request_id) {
-        if (PHYSICAL_MEMORY[0] == NULL)
-                init_memory_metadata(request_id);
-        if (request_id == LIBRARYREQ)
-                allocate_for_scheduler(size);
-        else (request_id == THREADREQ)
-                allocate_for_thread(size);
-        return NULL;
+	return rtn;
 }
 
 
-/*
-* Finds the page associated with the calling thread and frees allocated memory from it.
-* Should communicate with scheduler to know which thread made the request so it knows which page to free the allocation from.
-*/
-void my_deallocate(void *ptr, char *FILE, int *LINE, REQUEST_ID request_id) {
+void *mymalloc(int size_needed, void* memory, int allocated){
+
+	//unsigned int x, char * file, int line, void * memptr, int size
+	//x, file, line, myblock_ptr + current_page_meta->front_meta->page_frame*4096, 4096*num_of_pages
+	if ( head == NULL) {
+			head = (block_ptr)memory;
+			head->size = size_needed - sizeof(struct block);
+			head->state = UNALLOCATED;
+			head->next = NULL;
+		}
+
+	block_ptr tmp_block = head;
+
+
+			while(tmp_block != NULL){			//Checks for free space to the right of the middle.
+				if(tmp_block->state!= ALLOCATED) {
+					if(tmp_block->size >= size_needed) {
+						if(tmp_block->size > (size_needed + sizeof(struct block))) {			
+							block_ptr tmp = (block_ptr)(((char *)tmp_block) + sizeof(struct block) + size_needed);	
+
+												
+							tmp->size = tmp_block->size - sizeof(struct block) - size_needed;
+							tmp->state=UNALLOCATED ;
+							tmp_block -> next = tmp;
+
+
+
+							tmp_block->size = size_needed;													
+							tmp_block->state =ALLOCATED;
+
+
+							
+							return tmp_block+1;					
+						}else {
+							tmp_block->state = ALLOCATED;
+
+							
+							return tmp_block+1;					
+						}
+					}else {
+						tmp_block = tmp_block->next;
+					}
+				}else {
+					tmp_block = tmp_block->next;
+				}
+			}
+
+
+
 
 }
+
+void myfree(){
+
+
+
+}
+
+int printCount(){return count;}
+
+
 
