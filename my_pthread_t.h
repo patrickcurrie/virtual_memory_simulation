@@ -10,15 +10,77 @@
 #include <ucontext.h>
 #include <unistd.h>
 #include <signal.h>
-#include <sys/syscall.h>
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/syscall.h>
+#include <string.h>
+#include <sys/ucontext.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <malloc.h>
+
+
+#define malloc(x) myallocate(x, __FILE__, __LINE__, THREADREQ)
+
+//#define free(x) my_deallocate(x, __FILE__, __LINE__, THREADREQ)
+
 
 typedef uint my_pthread_t;
+typedef enum {THREADREQ, LIBRARYREQ} REQUEST_ID;
+
+enum BLOCK_STATE {
+        UNALLOCATED,
+        ALLOCATED
+};
+
+enum PAGE_STATE {
+        ASSIGNED,
+        UNASSIGNED
+};
+
+
+
+typedef struct page {
+        enum PAGE_STATE state;
+         REQUEST_ID request_id;
+        my_pthread_t tid;
+        int size_of_allocated;
+        char *start_address;
+        char *end_address;
+        char *block_list_head;
+        char *n2;
+
+        int frame;
+        int num_of_pages;
+        struct page *next;
+        struct page *front;
+        struct block *block_head;
+        int size;
+} *page_ptr;
+
+
+
+
+
+
+typedef struct block {
+	int size;
+	enum BLOCK_STATE state;
+	struct block * next;
+	struct block * prev;
+}*block_ptr;
+
+
+
+
+
+
+
+
 
 typedef enum thread_state {
         RUNNING, // Currently running.
@@ -79,7 +141,21 @@ typedef struct {
 } scheduler;
 
 
+#define USE_MY_PTHREAD 1
 
+ //(comment it if you want to use real pthread)
+
+#ifdef USE_MY_PTHREAD
+#define pthread_t my_pthread_t
+#define pthread_mutex_t my_pthread_mutex_t
+#define pthread_create my_pthread_create
+#define pthread_exit my_pthread_exit
+#define pthread_join my_pthread_join
+#define pthread_mutex_init my_pthread_mutex_init
+#define pthread_mutex_lock my_pthread_mutex_lock
+#define pthread_mutex_unlock my_pthread_mutex_unlock
+#define pthread_mutex_destroy my_pthread_mutex_destroy
+#endif
 
 
 /* Function Declarations: */
@@ -98,6 +174,8 @@ tcb *peek(queue * q);
 void print_multi_level_priority_queue();
 
 void print_lock_queue(queue *q);
+
+void my_pthread_yield_after_unlock_helper();
 
 /* Get current time */
 struct timeval current_time();
@@ -140,19 +218,19 @@ int my_pthread_mutex_destroy(my_pthread_mutex_t *mutex);
 /* Get tid of current thread */
 my_pthread_t get_current_tid();
 
+tcb* get_tcb2();
+void * allocate_lib(int x);
+void * myallocate(int x, char * file, int line, REQUEST_ID request_id);
+void mydeallocate(void * x, char * file, int line, REQUEST_ID request_id);
+void seg_handler(int sig, siginfo_t *si, void *unused);
+void swap_pages(int wFrame, int rFrame);
+int count_mem();
+void lock_all_mem();
+void *mymalloc(int size_needed, void* memory, int allocated);
 
-#endif
-#define USE_MY_PTHREAD 1 //(comment it if you want to use real pthread)
 
-#ifdef USE_MY_PTHREAD
-#define pthread_t my_pthread_t
-#define pthread_mutex_t my_pthread_mutex_t
-#define pthread_create my_pthread_create
-#define pthread_exit my_pthread_exit
-#define pthread_join my_pthread_join
-#define pthread_mutex_init my_pthread_mutex_init
-#define pthread_mutex_lock my_pthread_mutex_lock
-#define pthread_mutex_unlock my_pthread_mutex_unlock
-#define pthread_mutex_destroy my_pthread_mutex_destroy
+
+
+
 #endif
 
