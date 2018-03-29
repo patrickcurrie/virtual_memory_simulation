@@ -35,6 +35,8 @@ struct page {
         enum PAGE_STATE state;
         enum REQUEST_ID request_id;
         my_pthread_t tid;
+
+	char *next_owner_page;
         int size_of_allocated;
         char *start_address;
         char *end_address;
